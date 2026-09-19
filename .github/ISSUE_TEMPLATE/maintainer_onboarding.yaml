@@ -1,0 +1,82 @@
+name: Maintainer Onboarding Checklist
+description: Track access, calls, channels and first tasks for a newly merged maintainer.
+labels:
+  - kind/documentation
+  - kind/onboarding
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Welcome to the maintainer team! This checklist covers the steps that come
+        *after* your `MAINTAINERS.md` PR is merged. Work through it at your own
+        pace and check items off as you go. Ping a Community Engagement maintainer
+        in [#kepler-project](https://cloud-native.slack.com) if anything is unclear.
+
+  - type: input
+    id: new_maintainer
+    attributes:
+      label: 🧑‍💼 New maintainer
+      description: GitHub handle of the person being onboarded.
+      placeholder: "@username"
+    validations:
+      required: true
+
+  - type: input
+    id: nomination_pr
+    attributes:
+      label: 🔗 Nomination PR
+      description: Link to the merged PR that added this maintainer to `MAINTAINERS.md`.
+      placeholder: https://github.com/sustainable-computing-io/kepler/pull/
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: access
+    attributes:
+      label: 🔑 Access
+      description: Repository and org permissions.
+      options:
+        - label: Added to the appropriate GitHub team / granted write access
+        - label: Listed in `MAINTAINERS.md` with the correct role
+        - label: Added to the CNCF project-maintainers list (kept in sync with `MAINTAINERS.md`)
+        - label: Added to the `OWNERS` file(s) for the areas you review (e.g. `kepler-doc`)
+
+  - type: checkboxes
+    id: calls
+    attributes:
+      label: 📅 Community calls
+      description: The recurring syncs.
+      options:
+        - label: Know the Kepler Community call slot (1st/3rd Tuesday, 12:00 UTC) and have the recurring invite
+        - label: Have the Zoom/meeting link (pinned in #kepler-project)
+        - label: Have access to the shared meeting-notes doc
+
+  - type: checkboxes
+    id: channels
+    attributes:
+      label: 💬 Channels
+      description: Where the conversations happen.
+      options:
+        - label: Joined the CNCF Slack and the #kepler-project channel
+        - label: Subscribed to the relevant mailing lists / calendar
+        - label: Know where design proposals live (`docs/developer/proposal/`)
+
+  - type: checkboxes
+    id: first_tasks
+    attributes:
+      label: 🚀 First tasks
+      description: A gentle on-ramp.
+      options:
+        - label: Read GOVERNANCE.md and CONTRIBUTING.md end to end
+        - label: Reviewed at least one open PR
+        - label: Picked up one triage item or good-first-issue
+        - label: Introduced yourself in the next community call
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: 📝 Notes
+      description: Anything unclear, missing, or worth improving in this onboarding flow?
+    validations:
+      required: false

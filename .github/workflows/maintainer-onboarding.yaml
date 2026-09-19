@@ -1,0 +1,149 @@
+name: Maintainer Onboarding
+
+on: # yamllint disable-line rule:truthy
+  pull_request:
+    types: [closed]
+    paths:
+      - MAINTAINERS.md
+
+# default permissions as read only
+permissions: read-all
+
+jobs:
+  open-onboarding-issue:
+    # Only run for PRs that were actually merged (not just closed).
+    if: github.event.pull_request.merged == true
+    permissions:
+      issues: write
+      contents: read
+    runs-on: ubuntu-latest
+    name: Open onboarding checklist for new maintainer
+    steps:
+      - name: Detect new maintainers and open onboarding issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+
+            // Pull the diff of this PR and keep only added table rows in MAINTAINERS.md.
+            const diff = await github.request(
+              'GET /repos/{owner}/{repo}/pulls/{pull_number}',
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                headers: { accept: 'application/vnd.github.v3.diff' },
+              }
+            );
+
+            // Extract GitHub handles from the MAINTAINERS.md table diff.
+            // Table row shape: | Name | Company | Github ID | Email | Role |
+            // We compute NET-NEW handles: present in an added (+) row but absent
+            // from any removed (-) row. This avoids false positives when an
+            // existing maintainer's row is edited (role/email/company change,
+            // cycle refresh) — git shows the old row as - and the new one as +,
+            // so the handle appears on both sides and is correctly ignored.
+            const handleFrom = (line) => {
+              const cols = line.slice(1).split('|').map(c => c.trim());
+              if (cols.length < 6) return null;
+              const ghId = cols[3];
+              if (!ghId || ghId === 'Github ID' || /^-+$/.test(ghId)) return null;
+              const clean = ghId.replace(/^@/, '');
+              return /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,38})$/.test(clean) ? clean : null;
+            };
+
+            const added = new Set();
+            const removed = new Set();
+            let inFile = false;
+            for (const line of diff.data.split('\n')) {
+              if (line.startsWith('diff --git')) {
+                inFile = line.includes('MAINTAINERS.md');
+                continue;
+              }
+              if (!inFile) continue;
+              if (line.startsWith('+++') || line.startsWith('---')) continue;
+              if (line.startsWith('+')) {
+                const h = handleFrom(line);
+                if (h) added.add(h);
+              } else if (line.startsWith('-')) {
+                const h = handleFrom(line);
+                if (h) removed.add(h);
+              }
+            }
+
+            const unique = [...added].filter(h => !removed.has(h));
+            if (unique.length === 0) {
+              core.info('No net-new maintainer handle in the MAINTAINERS.md diff; nothing to do.');
+              return;
+            }
+
+            for (const handle of unique) {
+              // Avoid duplicates if the workflow re-runs.
+              const title = `Maintainer onboarding: @${handle}`;
+              const existing = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                labels: 'kind/onboarding',
+                per_page: 100,
+              });
+              if (existing.data.some(i => i.title === title)) {
+                core.info(`Onboarding issue for @${handle} already open; skipping.`);
+                continue;
+              }
+
+              const body = [
+                `Welcome to the maintainer team, @${handle}! 🎉`,
+                '',
+                `This checklist was opened automatically after ${pr.html_url} was merged.`,
+                'It covers the steps that come *after* the `MAINTAINERS.md` PR. Ping a',
+                'Community Engagement maintainer in #kepler-project if anything is unclear.',
+                '',
+                '### 🔑 Access',
+                '- [ ] Added to the appropriate GitHub team / granted write access',
+                '- [ ] Listed in `MAINTAINERS.md` with the correct role',
+                '- [ ] Added to the CNCF project-maintainers list (kept in sync with `MAINTAINERS.md`)',
+                '- [ ] Added to the `OWNERS` file(s) for the areas you review (e.g. `kepler-doc`)',
+                '',
+                '### 📅 Community calls',
+                '- [ ] Know the Kepler Community call slot (1st/3rd Tuesday, 12:00 UTC) and have the recurring invite',
+                '- [ ] Have the Zoom/meeting link (pinned in #kepler-project)',
+                '- [ ] Have access to the shared meeting-notes doc',
+                '',
+                '### 💬 Channels',
+                '- [ ] Joined the CNCF Slack and the #kepler-project channel',
+                '- [ ] Subscribed to the relevant mailing lists / calendar',
+                '- [ ] Know where design proposals live (`docs/developer/proposal/`)',
+                '',
+                '### 🚀 First tasks',
+                '- [ ] Read GOVERNANCE.md and CONTRIBUTING.md end to end',
+                '- [ ] Reviewed at least one open PR',
+                '- [ ] Picked up one triage item or good-first-issue',
+                '- [ ] Introduced yourself in the next community call',
+                '',
+                '_Improvements to this checklist are welcome — edit the issue or open a PR against_',
+                '_`.github/ISSUE_TEMPLATE/maintainer_onboarding.yaml`._',
+              ].join('\n');
+
+              const issue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['kind/documentation', 'kind/onboarding'],
+              });
+
+              // Best-effort assignment; ignore if the handle can't be assigned.
+              try {
+                await github.rest.issues.addAssignees({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.data.number,
+                  assignees: [handle],
+                });
+              } catch (e) {
+                core.info(`Could not assign @${handle}: ${e.message}`);
+              }
+
+              core.info(`Opened onboarding issue #${issue.data.number} for @${handle}.`);
+            }
